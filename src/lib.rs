@@ -62,6 +62,11 @@
 
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 
+#[cfg(loom)]
+use loom::{sync, thread};
+#[cfg(not(loom))]
+use std::{sync, thread};
+
 use std::cell::{Cell, UnsafeCell};
 use std::fmt;
 use std::future::Future;
@@ -70,10 +75,10 @@ use std::ops::{Deref, DerefMut};
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
-use std::sync::atomic::{self, AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-use std::sync::Arc;
+use sync::atomic::{self, AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+use sync::Arc;
 use std::task::{Context, Poll, Waker};
-use std::thread::{self, Thread};
+use std::thread::Thread; // TODO :/
 use std::time::{Duration, Instant};
 use std::usize;
 
@@ -143,7 +148,7 @@ impl Event {
     /// let event = Event::new();
     /// ```
     #[inline]
-    pub const fn new() -> Event {
+    pub fn new() -> Event { // TODO :/ const
         Event {
             inner: AtomicPtr::new(ptr::null_mut()),
         }
@@ -405,7 +410,11 @@ impl Event {
 impl Drop for Event {
     #[inline]
     fn drop(&mut self) {
+        #[cfg(not(loom))]
         let inner: *mut Inner = *self.inner.get_mut();
+
+        #[cfg(loom)]
+        let inner: *mut Inner = unsafe { self.inner.unsync_load() }; // TODO :/
 
         // If the state pointer has been initialized, deallocate it.
         if !inner.is_null() {
@@ -567,14 +576,14 @@ impl EventListener {
                     return true;
                 }
                 // Otherwise, set the state to `Waiting`.
-                _ => e.state.set(State::Waiting(thread::current())),
+                _ => e.state.set(State::Waiting(std::thread::current())), // TODO :/
             }
         }
 
         // Wait until a notification is received or the timeout is reached.
         loop {
             match deadline {
-                None => thread::park(),
+                None => std::thread::park(), // TODO :/
 
                 Some(deadline) => {
                     // Check for timeout.
@@ -589,7 +598,7 @@ impl EventListener {
                     }
 
                     // Park until the deadline.
-                    thread::park_timeout(deadline - now);
+                    std::thread::park_timeout(deadline - now); // TODO :/
                 }
             }
 

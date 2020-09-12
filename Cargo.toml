@@ -17,4 +17,4 @@ futures = { version = "0.3.5", default-features = false, features = ["std"] }
 waker-fn = "1.0.0"
 
 [target.'cfg(loom)'.dependencies]
-loom = { path = "../loom" }
+loom = "0.3.5"
